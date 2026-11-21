@@ -82,11 +82,11 @@
             </div>
         </div>
 
-        <!-- Paso Registro 1: Correo, Contraseña y Términos (sin teléfono) -->
+        <!-- Paso Registro 1: Correo, Contraseña y Términos -->
         <div id="auth-step-register-1" class="max-w-md w-full mx-auto px-6 pb-8 hidden flex-1 flex flex-col justify-between">
             <div class="space-y-4">
                 <button type="button" onclick="irPasoAuth('welcome')" class="text-slate-700 font-bold text-lg">←</button>
-                <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden"><div class="bg-emerald-600 h-full w-1/2"></div></div>
+                <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden"><div class="bg-emerald-600 h-full w-1/3"></div></div>
                 <h2 data-i18n="reg1_title" class="text-xl font-extrabold text-slate-900">Tu información siempre segura</h2>
                 <p data-i18n="reg1_sub" class="text-xs text-slate-500">Crea tu cuenta con tu correo electrónico y contraseña para proteger y recuperar tus datos en cualquier momento.</p>
 
@@ -110,6 +110,30 @@
                 </div>
             </div>
             <button type="button" onclick="registrarCuentaCorreo()" data-i18n="btn_continue" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl text-sm mt-6 shadow-md">Continuar</button>
+        </div>
+
+        <!-- Paso Registro 1.5: Verificación de Correo Electrónico -->
+        <div id="auth-step-verify-email" class="max-w-md w-full mx-auto px-6 pb-8 hidden flex-1 flex flex-col justify-between">
+            <div class="space-y-4">
+                <button type="button" onclick="irPasoAuth('register-1')" class="text-slate-700 font-bold text-lg">←</button>
+                <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden"><div class="bg-emerald-600 h-full w-2/3"></div></div>
+                <h2 class="text-xl font-extrabold text-slate-900">Verifica tu Correo Electrónico</h2>
+                <p class="text-xs text-slate-500">Te enviamos un enlace de verificación a <b id="verify-email-address" class="text-slate-800"></b> para activar la sincronización de tu cuenta.</p>
+
+                <div class="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl text-xs text-blue-950 space-y-1.5">
+                    <p class="font-bold">📩 Pasos:</p>
+                    <p>1. Abre tu correo (revisa <b>Bandeja de entrada</b> o <b>Spam</b>).</p>
+                    <p>2. Toca el enlace de verificación de GestorPro.</p>
+                    <p>3. Regresa aquí y pulsa <b>Ya verifiqué, continuar</b>.</p>
+                </div>
+
+                <button type="button" onclick="reenviarCorreoVerificacionUI()" class="w-full bg-blue-50 text-blue-800 border border-blue-200 font-bold py-2.5 rounded-xl text-xs">
+                    🔄 Reenviar correo de verificación
+                </button>
+            </div>
+            <button type="button" onclick="verificarCorreoYContinuar()" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl text-sm mt-6 shadow-md">
+                Ya verifiqué, continuar
+            </button>
         </div>
 
         <!-- Paso Registro 2: Datos del Dueño y Modelo de Negocio -->
@@ -764,8 +788,10 @@
         import {
             getAuth,
             createUserWithEmailAndPassword,
+            sendEmailVerification,
             signInWithEmailAndPassword,
-            sendPasswordResetEmail
+            sendPasswordResetEmail,
+            reload
         } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -782,9 +808,29 @@
         const auth = getAuth(app);
         auth.languageCode = document.documentElement.lang || 'es';
 
+        let registeredAuthUser = null;
+
         window.registrarCuentaCorreoReal = async function(email, pass) {
             const cred = await createUserWithEmailAndPassword(auth, email, pass);
-            return cred.user;
+            registeredAuthUser = cred.user;
+            await sendEmailVerification(registeredAuthUser);
+            return registeredAuthUser;
+        };
+
+        window.reenviarVerificacionCorreoReal = async function() {
+            const u = auth.currentUser || registeredAuthUser;
+            if (!u) throw new Error('No hay una sesión de registro activa.');
+            await sendEmailVerification(u);
+        };
+
+        window.confirmarVerificacionCorreoReal = async function() {
+            const u = auth.currentUser || registeredAuthUser;
+            if (!u) throw new Error('No hay una sesión de registro activa.');
+            await reload(u);
+            if (!u.emailVerified) {
+                throw new Error('Tu correo aún no aparece verificado. Abre el enlace que te llegó (revisa también Spam) y vuelve a tocar "Ya verifiqué, continuar".');
+            }
+            return true;
         };
 
         window.iniciarSesionFirebaseReal = async function(email, pass) {
@@ -1104,10 +1150,12 @@
         let pendingReg = {};
 
         function irPasoAuth(step) {
-            ['welcome', 'register-1', 'register-2', 'login', 'recover'].forEach(s => {
-                document.getElementById('auth-step-' + s).classList.add('hidden');
+            ['welcome', 'register-1', 'verify-email', 'register-2', 'login', 'recover'].forEach(s => {
+                const el = document.getElementById('auth-step-' + s);
+                if (el) el.classList.add('hidden');
             });
-            document.getElementById('auth-step-' + step).classList.remove('hidden');
+            const target = document.getElementById('auth-step-' + step);
+            if (target) target.classList.remove('hidden');
         }
 
         function abrirModalTerminos() { document.getElementById('modal-terminos').classList.remove('hidden'); }
@@ -1132,9 +1180,32 @@
             try {
                 await window.registrarCuentaCorreoReal(email, pass);
                 pendingReg = { email, pass };
+                document.getElementById('verify-email-address').innerText = email;
+                irPasoAuth('verify-email');
+            } catch (err) {
+                if (err && err.code === 'auth/email-already-in-use') {
+                    alert('Ese correo ya está registrado. Ve a "Ya tengo una cuenta" para iniciar sesión.');
+                    return;
+                }
+                alert('No se pudo crear la cuenta: ' + (err.message || err));
+            }
+        }
+
+        async function reenviarCorreoVerificacionUI() {
+            try {
+                await window.reenviarVerificacionCorreoReal();
+                alert('✅ Se reenvió el enlace de verificación a tu correo.');
+            } catch (err) {
+                alert('No se pudo reenviar: ' + (err.message || err));
+            }
+        }
+
+        async function verificarCorreoYContinuar() {
+            try {
+                await window.confirmarVerificacionCorreoReal();
                 irPasoAuth('register-2');
             } catch (err) {
-                alert('No se pudo crear la cuenta: ' + (err.message || err));
+                alert(err.message || 'Aún no se confirma la verificación del correo.');
             }
         }
 
