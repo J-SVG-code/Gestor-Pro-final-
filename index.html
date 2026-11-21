@@ -93,7 +93,29 @@
                 <div class="space-y-3 pt-2">
                     <div>
                         <label data-i18n="lbl_phone" class="block text-xs font-bold text-slate-700 mb-1">Número de Teléfono *</label>
-                        <input type="tel" id="reg-phone" class="w-full p-3 text-sm border-2 border-slate-300 rounded-xl focus:border-slate-900 outline-none" placeholder="+58 412 0000000">
+                        <div class="flex gap-2">
+                            <select id="reg-country-code" class="w-32 p-3 text-xs font-bold bg-white border-2 border-slate-300 rounded-xl focus:border-slate-900 outline-none shrink-0">
+                                <option value="+58" selected>🇻🇪 +58</option>
+                                <option value="+1">🇺🇸 +1</option>
+                                <option value="+57">🇨🇴 +57</option>
+                                <option value="+52">🇲🇽 +52</option>
+                                <option value="+51">🇵🇪 +51</option>
+                                <option value="+54">🇦🇷 +54</option>
+                                <option value="+56">🇨🇱 +56</option>
+                                <option value="+55">🇧🇷 +55</option>
+                                <option value="+34">🇪🇸 +34</option>
+                                <option value="+593">🇪🇨 +593</option>
+                                <option value="+507">🇵🇦 +507</option>
+                                <option value="+595">🇵🇾 +595</option>
+                                <option value="+598">🇺🇾 +598</option>
+                                <option value="+591">🇧🇴 +591</option>
+                                <option value="+39">🇮🇹 +39</option>
+                                <option value="+33">🇫🇷 +33</option>
+                                <option value="+49">🇩🇪 +49</option>
+                                <option value="+351">🇵🇹 +351</option>
+                            </select>
+                            <input type="tel" id="reg-phone" class="flex-1 min-w-0 p-3 text-sm border-2 border-slate-300 rounded-xl focus:border-slate-900 outline-none" placeholder="412 0000000">
+                        </div>
                     </div>
                     <div>
                         <label data-i18n="lbl_email" class="block text-xs font-bold text-slate-700 mb-1">Correo Electrónico *</label>
@@ -235,6 +257,29 @@
 
                 <div>
                     <label id="lbl-rec-target" class="block text-xs font-bold text-slate-700 mb-1">Correo electrónico registrado</label>
+                    <div id="rec-phone-wrap" class="flex gap-2 hidden">
+                        <select id="rec-country-code" class="w-32 p-3 text-xs font-bold bg-white border-2 border-slate-300 rounded-xl focus:border-slate-900 outline-none shrink-0">
+                            <option value="+58" selected>🇻🇪 +58</option>
+                            <option value="+1">🇺🇸 +1</option>
+                            <option value="+57">🇨🇴 +57</option>
+                            <option value="+52">🇲🇽 +52</option>
+                            <option value="+51">🇵🇪 +51</option>
+                            <option value="+54">🇦🇷 +54</option>
+                            <option value="+56">🇨🇱 +56</option>
+                            <option value="+55">🇧🇷 +55</option>
+                            <option value="+34">🇪🇸 +34</option>
+                            <option value="+593">🇪🇨 +593</option>
+                            <option value="+507">🇵🇦 +507</option>
+                            <option value="+595">🇵🇾 +595</option>
+                            <option value="+598">🇺🇾 +598</option>
+                            <option value="+591">🇧🇴 +591</option>
+                            <option value="+39">🇮🇹 +39</option>
+                            <option value="+33">🇫🇷 +33</option>
+                            <option value="+49">🇩🇪 +49</option>
+                            <option value="+351">🇵🇹 +351</option>
+                        </select>
+                        <input type="tel" id="rec-phone-input" class="flex-1 min-w-0 p-3 text-sm border-2 border-slate-300 rounded-xl" placeholder="412 0000000">
+                    </div>
                     <input type="text" id="rec-target-input" class="w-full p-3 text-sm border-2 border-slate-300 rounded-xl" placeholder="ejemplo@correo.com">
                 </div>
                 <button type="button" onclick="enviarCodigoRecuperacion()" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs">Enviar Código de Verificación</button>
@@ -839,20 +884,25 @@
             return window._gpRecaptcha;
         }
 
-        function normalizeE164Phone(rawPhone) {
-            const cleaned = (rawPhone || '').trim().replace(/[^\d+]/g, '');
-            if (!cleaned) return '';
-            if (cleaned.startsWith('+')) return cleaned;
-            if (cleaned.startsWith('0') && cleaned.length >= 10) {
-                return '+58' + cleaned.slice(1);
+        function normalizeE164Phone(rawPhone, dialCode = '+58') {
+            let digits = (rawPhone || '').trim().replace(/[^\d+]/g, '');
+            if (!digits) return '';
+            if (digits.startsWith('+')) return digits;
+
+            const cleanDial = (dialCode || '+58').replace(/[^\d]/g, '');
+            if (digits.startsWith(cleanDial) && digits.length > cleanDial.length + 6) {
+                return '+' + digits;
             }
-            return '+' + cleaned;
+            if (digits.startsWith('0')) {
+                digits = digits.slice(1);
+            }
+            return '+' + cleanDial + digits;
         }
 
         window.enviarVerificacionesReales = async function(phone, email, pass) {
             const e164Phone = normalizeE164Phone(phone);
             if (!e164Phone || e164Phone.length < 8) {
-                throw new Error('Ingresa un número de teléfono válido con código de país (ej. +584121234567).');
+                throw new Error('Ingresa un número de teléfono válido.');
             }
 
             const cred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -894,8 +944,8 @@
             await sendPasswordResetEmail(auth, email);
         };
 
-        window.enviarRecuperacionTelefonoReal = async function(phone) {
-            const e164Phone = normalizeE164Phone(phone);
+        window.enviarRecuperacionTelefonoReal = async function(phone, dialCode = '+58') {
+            const e164Phone = normalizeE164Phone(phone, dialCode);
             const verifier = ensureRecaptcha('rec-recaptcha-container');
             pendingPhoneConfirmation = await signInWithPhoneNumber(auth, e164Phone, verifier);
             return e164Phone;
@@ -1240,13 +1290,30 @@
             cerrarModalTerminos();
         }
 
+        function combinarCodigoYTelefono(dialCode, rawPhone) {
+            let digits = (rawPhone || '').trim().replace(/[^\d+]/g, '');
+            if (!digits) return '';
+            if (digits.startsWith('+')) return digits;
+
+            const cleanDial = (dialCode || '+58').replace(/[^\d]/g, '');
+            if (digits.startsWith(cleanDial) && digits.length > cleanDial.length + 6) {
+                return '+' + digits;
+            }
+            if (digits.startsWith('0')) {
+                digits = digits.slice(1);
+            }
+            return '+' + cleanDial + digits;
+        }
+
         async function enviarCodigosVerificacionRegistro() {
-            const phone = document.getElementById('reg-phone').value.trim();
+            const dialCode = document.getElementById('reg-country-code').value;
+            const rawPhone = document.getElementById('reg-phone').value.trim();
+            const phone = combinarCodigoYTelefono(dialCode, rawPhone);
             const email = document.getElementById('reg-email').value.trim();
             const pass = document.getElementById('reg-pass').value;
             const terms = document.getElementById('reg-terms').checked;
 
-            if (!phone || !email || pass.length < 6) {
+            if (!rawPhone || !email || pass.length < 6) {
                 return alert('Completa teléfono, correo y una contraseña de al menos 6 caracteres.');
             }
             if (!terms) {
@@ -1340,22 +1407,28 @@
 
         function seleccionarMetodoRecuperacion(method) {
             recoverMethod = method;
-            document.getElementById('btn-rec-email').className = method === 'email' ? 'p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-xs font-bold text-blue-900' : 'p-2.5 rounded-xl border-2 border-slate-200 bg-white text-xs font-bold text-slate-700';
-            document.getElementById('btn-rec-phone').className = method === 'phone' ? 'p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-xs font-bold text-blue-900' : 'p-2.5 rounded-xl border-2 border-slate-200 bg-white text-xs font-bold text-slate-700';
-            document.getElementById('lbl-rec-target').innerText = method === 'email' ? 'Correo electrónico registrado' : 'Número de teléfono registrado';
-            document.getElementById('rec-target-input').placeholder = method === 'email' ? 'ejemplo@correo.com' : '+58 412 0000000';
+            const isEmail = method === 'email';
+            document.getElementById('btn-rec-email').className = isEmail ? 'p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-xs font-bold text-blue-900' : 'p-2.5 rounded-xl border-2 border-slate-200 bg-white text-xs font-bold text-slate-700';
+            document.getElementById('btn-rec-phone').className = !isEmail ? 'p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-xs font-bold text-blue-900' : 'p-2.5 rounded-xl border-2 border-slate-200 bg-white text-xs font-bold text-slate-700';
+            document.getElementById('lbl-rec-target').innerText = isEmail ? 'Correo electrónico registrado' : 'Número de teléfono registrado';
+            document.getElementById('rec-target-input').classList.toggle('hidden', !isEmail);
+            document.getElementById('rec-phone-wrap').classList.toggle('hidden', isEmail);
         }
 
         async function enviarCodigoRecuperacion() {
-            const target = document.getElementById('rec-target-input').value.trim();
+            const isEmail = recoverMethod === 'email';
+            const target = isEmail
+                ? document.getElementById('rec-target-input').value.trim()
+                : document.getElementById('rec-phone-input').value.trim();
             if (!target) return alert('Ingresa tu dato registrado.');
             try {
-                if (recoverMethod === 'email') {
+                if (isEmail) {
                     await window.enviarRecuperacionCorreoReal(target);
                     document.getElementById('rec-code-box').classList.remove('hidden');
                     document.getElementById('rec-code-alert').innerHTML = `✅ Se envió un enlace real de restablecimiento a <b>${target}</b>. Revisa tu correo y abre el enlace para cambiar tu clave.`;
                 } else {
-                    const e164 = await window.enviarRecuperacionTelefonoReal(target);
+                    const dialCode = document.getElementById('rec-country-code').value;
+                    const e164 = await window.enviarRecuperacionTelefonoReal(target, dialCode);
                     document.getElementById('rec-code-box').classList.remove('hidden');
                     document.getElementById('rec-code-alert').innerHTML = `✅ Código SMS enviado a <b>${e164}</b>. Ingrésalo abajo para verificar tu teléfono.`;
                 }
