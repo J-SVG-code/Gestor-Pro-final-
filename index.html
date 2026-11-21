@@ -790,6 +790,7 @@
             createUserWithEmailAndPassword,
             sendEmailVerification,
             signInWithEmailAndPassword,
+            signInAnonymously,
             sendPasswordResetEmail,
             reload
         } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
@@ -836,6 +837,14 @@
         window.iniciarSesionFirebaseReal = async function(email, pass) {
             const cred = await signInWithEmailAndPassword(auth, email, pass);
             return cred.user;
+        };
+
+        window.asegurarSesionAnonimaQR = async function() {
+            if (!auth.currentUser) {
+                const cred = await signInAnonymously(auth);
+                return cred.user;
+            }
+            return auth.currentUser;
         };
 
         window.enviarRecuperacionCorreoReal = async function(email) {
@@ -1504,6 +1513,14 @@
                 }
                 const syncCode = parts[1];
                 const assignedRole = parts[2];
+
+                try {
+                    if (typeof window.asegurarSesionAnonimaQR === 'function') {
+                        await window.asegurarSesionAnonimaQR();
+                    }
+                } catch (err) {
+                    return alert('No se pudo iniciar la sesión de vinculación en Firebase: ' + (err.message || err));
+                }
 
                 let remoteStore = null;
                 if (typeof window.obtenerTiendaPorCodigoNube === 'function') {
