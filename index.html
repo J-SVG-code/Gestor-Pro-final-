@@ -123,7 +123,8 @@
                 <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden"><div class="bg-emerald-600 h-full w-2/3"></div></div>
                 <h2 data-i18n="otp_title" class="text-xl font-extrabold text-slate-900">Verifica tu Teléfono y Correo</h2>
                 <p data-i18n="otp_sub" class="text-xs text-slate-500">Hemos enviado un código de verificación a tu teléfono y otro a tu correo electrónico para garantizar la recuperación de tu cuenta.</p>
-                <div id="otp-simulated-banner" class="bg-amber-50 border border-amber-300 p-3 rounded-xl text-xs text-amber-900"></div>
+                <div id="otp-status-banner" class="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900"></div>
+                <div id="recaptcha-container" class="flex justify-center"></div>
                 <div class="space-y-3">
                     <div>
                         <label data-i18n="lbl_otp_phone" class="block text-xs font-bold text-slate-700 mb-1">Código enviado al Teléfono (6 dígitos)</label>
@@ -239,7 +240,8 @@
                 <button type="button" onclick="enviarCodigoRecuperacion()" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs">Enviar Código de Verificación</button>
 
                 <div id="rec-code-box" class="hidden space-y-3 pt-2 border-t border-slate-200">
-                    <div id="rec-code-alert" class="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-xs text-emerald-900"></div>
+                    <div id="rec-code-alert" class="bg-blue-50 border border-blue-200 p-2.5 rounded-xl text-xs text-blue-900"></div>
+                    <div id="rec-recaptcha-container" class="flex justify-center"></div>
                     <input type="text" id="rec-otp-input" maxlength="6" class="w-full p-3 text-center font-mono text-sm border-2 border-slate-300 rounded-xl" placeholder="Código de 6 dígitos">
                     <input type="password" id="rec-new-pass" class="w-full p-3 text-sm border-2 border-slate-300 rounded-xl" placeholder="Nueva contraseña (mín. 6 caracteres)">
                     <button type="button" onclick="confirmarNuevaContrasena()" class="w-full bg-slate-900 text-white font-bold py-3 rounded-xl text-sm">Guardar Nueva Contraseña</button>
@@ -339,7 +341,6 @@
                 </div>
             </div>
 
-            <!-- Botón 3 puntos verticales arriba a la derecha -->
             <button type="button" onclick="toggleMenuLateral(true)" aria-label="Menú" class="p-2 rounded-xl bg-blue-800 hover:bg-blue-700 active:scale-95 transition flex flex-col items-center justify-center gap-1 w-10 h-10 shrink-0">
                 <span class="w-1.5 h-1.5 bg-white rounded-full"></span>
                 <span class="w-1.5 h-1.5 bg-white rounded-full"></span>
@@ -387,7 +388,6 @@
                     </div>
                 </div>
 
-                <!-- Desglose exacto de dónde está el dinero -->
                 <div class="bg-black/20 p-3 rounded-xl space-y-1.5 text-xs">
                     <p class="text-[11px] font-bold text-amber-300">💼 Ubicación Exacta del Dinero Disponible:</p>
                     <div class="flex justify-between"><span>💵 Efectivo Moneda Local:</span> <span id="res-caja-local" class="font-bold">0.00</span></div>
@@ -398,7 +398,6 @@
                 </div>
             </div>
 
-            <!-- Gráficas en esquema: Gastos vs Ganancias o Pérdidas -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
                 <h3 data-i18n="chart_title" class="text-xs font-extrabold text-slate-800">📈 Esquema Gráfico: Ingresos, Gastos y Ganancias/Pérdidas</h3>
                 <div class="h-52">
@@ -406,7 +405,6 @@
                 </div>
             </div>
 
-            <!-- Descarga Reporte PDF Completo -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-2">
                 <h3 class="text-xs font-extrabold text-slate-800">📄 Reporte Ejecutivo Completo (PDF / Impresión)</h3>
                 <p class="text-[11px] text-slate-500">Incluye datos del dueño, tienda, saldos por cuenta (local, USD, banco), inventario, ventas, fiados y nómina.</p>
@@ -472,7 +470,6 @@
                         </div>
                     </div>
 
-                    <!-- Imagen del producto: Cámara o Galería -->
                     <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                         <p class="text-[11px] font-bold text-slate-700">🖼️ Imagen del Producto (Opcional para Catálogo)</p>
                         <div class="flex gap-2">
@@ -799,6 +796,16 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+        import {
+            getAuth,
+            createUserWithEmailAndPassword,
+            sendEmailVerification,
+            signInWithEmailAndPassword,
+            sendPasswordResetEmail,
+            RecaptchaVerifier,
+            signInWithPhoneNumber,
+            reload
+        } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAiXgqBk_tHsz5Ukar-YuvhZPQcg57Ss8g",
@@ -811,6 +818,96 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
+        auth.languageCode = document.documentElement.lang || 'es';
+
+        let pendingPhoneConfirmation = null;
+        let pendingEmailUser = null;
+
+        function ensureRecaptcha(containerId) {
+            const el = document.getElementById(containerId);
+            if (!el) return null;
+            if (!window._gpRecaptcha || window._gpRecaptchaContainerId !== containerId) {
+                if (window._gpRecaptcha) {
+                    try { window._gpRecaptcha.clear(); } catch (e) {}
+                }
+                window._gpRecaptcha = new RecaptchaVerifier(auth, containerId, {
+                    size: 'invisible'
+                });
+                window._gpRecaptchaContainerId = containerId;
+            }
+            return window._gpRecaptcha;
+        }
+
+        function normalizeE164Phone(rawPhone) {
+            const cleaned = (rawPhone || '').trim().replace(/[^\d+]/g, '');
+            if (!cleaned) return '';
+            if (cleaned.startsWith('+')) return cleaned;
+            if (cleaned.startsWith('0') && cleaned.length >= 10) {
+                return '+58' + cleaned.slice(1);
+            }
+            return '+' + cleaned;
+        }
+
+        window.enviarVerificacionesReales = async function(phone, email, pass) {
+            const e164Phone = normalizeE164Phone(phone);
+            if (!e164Phone || e164Phone.length < 8) {
+                throw new Error('Ingresa un número de teléfono válido con código de país (ej. +584121234567).');
+            }
+
+            const cred = await createUserWithEmailAndPassword(auth, email, pass);
+            pendingEmailUser = cred.user;
+            await sendEmailVerification(pendingEmailUser);
+
+            const verifier = ensureRecaptcha('recaptcha-container');
+            pendingPhoneConfirmation = await signInWithPhoneNumber(auth, e164Phone, verifier);
+
+            return { e164Phone, email };
+        };
+
+        window.verificarCodigosReales = async function(phoneCode) {
+            if (!pendingPhoneConfirmation) {
+                throw new Error('Primero solicita el envío de los códigos.');
+            }
+            if (!phoneCode || phoneCode.length < 6) {
+                throw new Error('Ingresa el código SMS de 6 dígitos que llegó a tu teléfono.');
+            }
+
+            await pendingPhoneConfirmation.confirm(phoneCode);
+
+            if (auth.currentUser) {
+                await reload(auth.currentUser);
+            }
+            const userRef = auth.currentUser || pendingEmailUser;
+            if (!userRef || !userRef.emailVerified) {
+                throw new Error('Aún no se detecta tu correo como verificado. Abre el enlace que te llegó al correo y vuelve a pulsar Verificar.');
+            }
+            return true;
+        };
+
+        window.iniciarSesionFirebaseReal = async function(email, pass) {
+            const cred = await signInWithEmailAndPassword(auth, email, pass);
+            return cred.user;
+        };
+
+        window.enviarRecuperacionCorreoReal = async function(email) {
+            await sendPasswordResetEmail(auth, email);
+        };
+
+        window.enviarRecuperacionTelefonoReal = async function(phone) {
+            const e164Phone = normalizeE164Phone(phone);
+            const verifier = ensureRecaptcha('rec-recaptcha-container');
+            pendingPhoneConfirmation = await signInWithPhoneNumber(auth, e164Phone, verifier);
+            return e164Phone;
+        };
+
+        window.confirmarCodigoTelefonoRecuperacion = async function(code) {
+            if (!pendingPhoneConfirmation) {
+                throw new Error('Solicita primero el código SMS.');
+            }
+            await pendingPhoneConfirmation.confirm(code);
+            return true;
+        };
 
         let unsubscribeStore = null;
         let isRemoteUpdate = false;
@@ -1127,10 +1224,7 @@
         };
 
         let pendingReg = {};
-        let generatedOtpPhone = '';
-        let generatedOtpEmail = '';
         let recoverMethod = 'email';
-        let generatedRecOtp = '';
 
         function irPasoAuth(step) {
             ['welcome', 'register-1', 'register-otp', 'register-2', 'login', 'recover'].forEach(s => {
@@ -1146,7 +1240,7 @@
             cerrarModalTerminos();
         }
 
-        function enviarCodigosVerificacionRegistro() {
+        async function enviarCodigosVerificacionRegistro() {
             const phone = document.getElementById('reg-phone').value.trim();
             const email = document.getElementById('reg-email').value.trim();
             const pass = document.getElementById('reg-pass').value;
@@ -1159,25 +1253,29 @@
                 return alert('Debes aceptar los Términos, Condiciones y Política de Privacidad para continuar.');
             }
 
-            pendingReg = { phone, email, pass };
-            generatedOtpPhone = String(Math.floor(100000 + Math.random() * 900000));
-            generatedOtpEmail = String(Math.floor(100000 + Math.random() * 900000));
-
-            document.getElementById('otp-simulated-banner').innerHTML = `
-                <b>📨 Códigos enviados por GestorPro:</b><br>
-                📱 SMS (${phone}): <b class="font-mono text-sm">${generatedOtpPhone}</b><br>
-                📧 Correo (${email}): <b class="font-mono text-sm">${generatedOtpEmail}</b>
-            `;
-            irPasoAuth('register-otp');
+            try {
+                const res = await window.enviarVerificacionesReales(phone, email, pass);
+                pendingReg = { phone: res.e164Phone, email, pass };
+                document.getElementById('otp-status-banner').innerHTML = `
+                    <b>📨 Verificación Real Enviada:</b><br>
+                    1. Te enviamos un <b>SMS con código de 6 dígitos</b> a <b>${res.e164Phone}</b>.<br>
+                    2. Te enviamos un <b>correo de verificación</b> a <b>${email}</b> (revisa tu bandeja o spam y toca el enlace para verificarlo).
+                `;
+                document.getElementById('input-otp-email').placeholder = 'Correo verificado en bandeja';
+                irPasoAuth('register-otp');
+            } catch (err) {
+                alert('No se pudo enviar la verificación: ' + (err.message || err));
+            }
         }
 
-        function validarCodigosRegistro() {
+        async function validarCodigosRegistro() {
             const cPhone = document.getElementById('input-otp-phone').value.trim();
-            const cEmail = document.getElementById('input-otp-email').value.trim();
-            if (cPhone !== generatedOtpPhone || cEmail !== generatedOtpEmail) {
-                return alert('Los códigos ingresados no coinciden. Verifica ambos códigos.');
+            try {
+                await window.verificarCodigosReales(cPhone);
+                irPasoAuth('register-2');
+            } catch (err) {
+                alert(err.message || 'No se pudo completar la verificación.');
             }
-            irPasoAuth('register-2');
         }
 
         function finalizarRegistroCuenta() {
@@ -1192,7 +1290,6 @@
                 name,
                 email: pendingReg.email,
                 phone: pendingReg.phone,
-                pass: pendingReg.pass,
                 createdAt: Date.now()
             };
             deviceSession.role = 'dueno';
@@ -1209,6 +1306,12 @@
             const pass = document.getElementById('login-pass').value;
             if (!email || !pass) return alert('Ingresa tu correo y contraseña.');
 
+            try {
+                await window.iniciarSesionFirebaseReal(email, pass);
+            } catch (err) {
+                return alert('Error al iniciar sesión: ' + (err.message || 'Correo o contraseña incorrectos.'));
+            }
+
             let userFound = null;
             if (typeof window.buscarUsuarioNube === 'function') {
                 userFound = await window.buscarUsuarioNube(email);
@@ -1217,15 +1320,20 @@
                 const localSaved = JSON.parse(localStorage.getItem('gp_user'));
                 if (localSaved && localSaved.email.toLowerCase() === email) userFound = localSaved;
             }
-
-            if (!userFound || userFound.pass !== pass) {
-                return alert('Correo o contraseña incorrectos.');
+            if (!userFound) {
+                userFound = { name: email.split('@')[0], email, phone: '', createdAt: Date.now() };
             }
 
             currentUser = userFound;
             deviceSession.role = 'dueno';
-            stores = userFound.stores && userFound.stores.length > 0 ? userFound.stores : stores;
-            activeStoreId = stores[0].id;
+            if (userFound.stores && userFound.stores.length > 0) {
+                stores = userFound.stores;
+                activeStoreId = stores[0].id;
+            } else if (stores.length === 0) {
+                const tiendaDefault = crearEstructuraTienda('Mi Negocio', 'productos', currentUser);
+                stores = [tiendaDefault];
+                activeStoreId = tiendaDefault.id;
+            }
             guardarTodo();
             entrarAppPrincipal();
         }
@@ -1241,9 +1349,19 @@
         async function enviarCodigoRecuperacion() {
             const target = document.getElementById('rec-target-input').value.trim();
             if (!target) return alert('Ingresa tu dato registrado.');
-            generatedRecOtp = String(Math.floor(100000 + Math.random() * 900000));
-            document.getElementById('rec-code-box').classList.remove('hidden');
-            document.getElementById('rec-code-alert').innerHTML = `✅ Código de recuperación enviado a <b>${target}</b>: <span class="font-mono font-extrabold text-sm">${generatedRecOtp}</span>`;
+            try {
+                if (recoverMethod === 'email') {
+                    await window.enviarRecuperacionCorreoReal(target);
+                    document.getElementById('rec-code-box').classList.remove('hidden');
+                    document.getElementById('rec-code-alert').innerHTML = `✅ Se envió un enlace real de restablecimiento a <b>${target}</b>. Revisa tu correo y abre el enlace para cambiar tu clave.`;
+                } else {
+                    const e164 = await window.enviarRecuperacionTelefonoReal(target);
+                    document.getElementById('rec-code-box').classList.remove('hidden');
+                    document.getElementById('rec-code-alert').innerHTML = `✅ Código SMS enviado a <b>${e164}</b>. Ingrésalo abajo para verificar tu teléfono.`;
+                }
+            } catch (err) {
+                alert('No se pudo enviar: ' + (err.message || err));
+            }
         }
 
         async function confirmarNuevaContrasena() {
@@ -1251,22 +1369,25 @@
             const newPass = document.getElementById('rec-new-pass').value;
             const target = document.getElementById('rec-target-input').value.trim().toLowerCase();
 
-            if (code !== generatedRecOtp) return alert('Código incorrecto.');
-            if (newPass.length < 6) return alert('La nueva contraseña debe tener al menos 6 caracteres.');
+            try {
+                if (recoverMethod === 'phone') {
+                    await window.confirmarCodigoTelefonoRecuperacion(code);
+                }
+                if (newPass.length < 6) return alert('La nueva contraseña debe tener al menos 6 caracteres.');
 
-            let userObj = currentUser || JSON.parse(localStorage.getItem('gp_user'));
-            if (!userObj && recoverMethod === 'email' && typeof window.buscarUsuarioNube === 'function') {
-                userObj = await window.buscarUsuarioNube(target);
-            }
-            if (userObj) {
-                userObj.pass = newPass;
-                currentUser = userObj;
-                if (typeof window.guardarUsuarioNube === 'function') await window.guardarUsuarioNube(userObj);
-                localStorage.setItem('gp_user', JSON.stringify(userObj));
-                alert('¡Contraseña actualizada con éxito! Ya puedes iniciar sesión.');
+                let userObj = currentUser || JSON.parse(localStorage.getItem('gp_user'));
+                if (!userObj && recoverMethod === 'email' && typeof window.buscarUsuarioNube === 'function') {
+                    userObj = await window.buscarUsuarioNube(target);
+                }
+                if (userObj) {
+                    currentUser = userObj;
+                    if (typeof window.guardarUsuarioNube === 'function') await window.guardarUsuarioNube(userObj);
+                    localStorage.setItem('gp_user', JSON.stringify(userObj));
+                }
+                alert('✅ Verificación completada. Si elegiste correo, ya puedes iniciar sesión con la contraseña asignada en el enlace.');
                 irPasoAuth('login');
-            } else {
-                alert('No se encontró una cuenta asociada a ese dato.');
+            } catch (err) {
+                alert('Error al confirmar: ' + (err.message || err));
             }
         }
 
@@ -1428,7 +1549,6 @@
             if (deviceSession.role !== 'dueno') {
                 return alert('Solo el dueño de la tienda puede adquirir la suscripción.');
             }
-            // === PUENTE GOOGLE PLAY BILLING (DIGITAL GOODS API) ===
             const SKU_MENSUAL = 'gestorpro_mensual_5usd';
             const SKU_ANUAL = 'gestorpro_anual_45usd';
             const skuSeleccionado = plan === 'mensual' ? SKU_MENSUAL : SKU_ANUAL;
