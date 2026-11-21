@@ -385,21 +385,12 @@
             </button>
         </div>
     </header>
-
-    <!-- ==================== BANNER PUBLICITARIO DISCRETO ==================== -->
-    <div id="admob-banner-bar" class="bg-slate-900 text-slate-300 text-[10px] py-1.5 px-3 border-b border-slate-800 hidden">
-        <div class="max-w-md mx-auto flex justify-between items-center">
-            <span class="bg-amber-400 text-slate-950 font-extrabold px-1.5 rounded text-[9px]">AD</span>
-            <span class="truncate mx-2">Espacio Publicitario • GestorPro</span>
-            <button type="button" onclick="navegarSeccion('pro')" class="text-amber-400 font-bold underline shrink-0">Pro</button>
-        </div>
-    </div>
-
+    
     <!-- ==================== CONTENEDOR PRINCIPAL ==================== -->
     <main id="app-main" class="flex-1 max-w-md w-full mx-auto p-4 pb-10 hidden">
 
         <!-- ==================== SECCIÓN 1: INICIO Y GRÁFICAS ==================== -->
-        <section id="sec-inicio" class="app-section space-y-4">
+       <section id="sec-inicio" class="app-section space-y-4">
             <div id="panel-alertas-ancladas" class="space-y-2 hidden"></div>
 
             <div class="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 text-white p-4 rounded-2xl shadow-lg space-y-3">
@@ -492,6 +483,13 @@
                 <button type="button" onclick="generarReportePDF()" class="w-full bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-red-700 transition shadow">
                     📥 Descargar / Imprimir Reporte PDF Completo
                 </button>
+            </div>
+                       <div id="admob-banner-bar" class="bg-slate-900 text-slate-300 text-[10px] py-2 px-3 rounded-2xl border border-slate-800">
+                <div class="flex justify-between items-center">
+                    <span class="bg-amber-400 text-slate-950 font-extrabold px-1.5 rounded text-[9px]">AD</span>
+                    <span class="truncate mx-2">Espacio Publicitario • GestorPro</span>
+                    <button type="button" onclick="navegarSeccion('pro')" class="text-amber-400 font-bold underline shrink-0">Pro</button>
+                </div>
             </div>
         </section>
 
